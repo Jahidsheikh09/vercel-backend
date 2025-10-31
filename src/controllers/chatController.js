@@ -3,6 +3,17 @@ const Chat = require("../models/chatModel");
 const Message = require("../models/messageModel");
 const { getIO, emitToUser } = require("../sockets/index.js");
 
+// Helper function to decrypt message content
+function decryptMessageContent(content) {
+  if (!content || typeof content !== "string") return content || "";
+  try {
+    return Message.decryptContent(content);
+  } catch (e) {
+    console.warn("Failed to decrypt message:", e.message);
+    return content;
+  }
+}
+
 const createChat = asyncHandler(async (req, res) => {
   const { memberIds = [], isGroup = false, name = "", avatarUrl = "" } = req.body;
   const members = Array.from(new Set([req.user.id, ...memberIds]));
@@ -171,11 +182,13 @@ function mapChat(c) {
 
 function mapMessage(m) {
   if (!m) return null;
+  // Decrypt message content before returning
+  const decryptedContent = decryptMessageContent(m.content);
   return {
     id: m._id?.toString?.() || m.id || m,
     chat: m.chat?._id?.toString?.() || m.chat?.id || m.chat,
     sender: m.sender?._id?.toString?.() || m.sender?.id || m.sender,
-    content: m.content,
+    content: decryptedContent,
     media: m.media,
     status: m.status,
     createdAt: m.createdAt,

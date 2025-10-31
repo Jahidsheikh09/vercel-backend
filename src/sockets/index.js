@@ -110,12 +110,26 @@ function initSocket(server, corsOrigin) {
 
     socket.on("message:send", async (data, ack) => {
       try {
-        console.log("message:send");
+        console.log(`[sockets] message:send received from user=${userId}`, data);
         const { chatId, content, media = [] } = data;
+        
+        if (!chatId || !content) {
+          console.warn(`[sockets] Invalid message data from user=${userId}`);
+          return ack?.({ error: "Missing chatId or content" });
+        }
+        
         const chat = await Chat.findById(chatId);
-        console.log(chat);
-        if (!chat || !chat.members.map(String).includes(userId))
+        console.log(`[sockets] Found chat:`, chat ? { id: chat._id, members: chat.members.map(m => m.toString()) } : "not found");
+        
+        if (!chat) {
+          console.warn(`[sockets] Chat not found: ${chatId}`);
+          return ack?.({ error: "Chat not found" });
+        }
+        
+        if (!chat.members.map(String).includes(userId)) {
+          console.warn(`[sockets] User ${userId} is not a member of chat ${chatId}`);
           return ack?.({ error: "Not a member" });
+        }
         const status = {};
         chat.members.forEach((m) => {
           if (m.toString() !== userId) status[m.toString()] = "sent";
@@ -173,13 +187,22 @@ function initSocket(server, corsOrigin) {
           // non-fatal; receivers can still fetch via REST
         }
 
+        // Decrypt message content before sending
+        let decryptedContent = message.content || "";
+        try {
+          decryptedContent = Message.decryptContent(message.content);
+        } catch (e) {
+          console.warn("Failed to decrypt message in socket:", e.message);
+          // Use original content if decryption fails
+        }
+
         const outMsg = {
           id: message._id.toString(),
           chat: message.chat?.toString ? message.chat.toString() : String(message.chat),
           sender: message.sender?.toString
             ? message.sender.toString()
             : String(message.sender),
-          content: message.content,
+          content: decryptedContent,
           media: message.media || [],
           status: normalizeStatus(message.status),
           createdAt: message.createdAt,
@@ -189,25 +212,31 @@ function initSocket(server, corsOrigin) {
 
         // Emit to the chat room AND directly to each member's sockets to ensure delivery
         // even if a user hasn't joined the room yet (e.g., newly created chats).
+        const chatRoomId = String(chat._id);
         try {
-          io.to(outMsg.chat).emit("message:new", outMsg);
-          console.info(`[sockets] emitted message ${outMsg.id} to room=${outMsg.chat}`);
+          io.to(chatRoomId).emit("message:new", outMsg);
+          console.info(`[sockets] emitted message ${outMsg.id} to room=${chatRoomId}`);
         } catch (err) {
           console.warn(
-            `[sockets] failed to emit to room=${outMsg.chat}:`,
+            `[sockets] failed to emit to room=${chatRoomId}:`,
             err.message || err
           );
         }
-        // Always emit directly to members as a reliability measure
-        chat.members.forEach((m) => {
-          const target = m.toString();
-          const sockets = userIdToSockets.get(target);
+        // Always emit directly to ALL members (including sender) as a reliability measure
+        const memberIds = chat.members.map((m) => m.toString());
+        console.info(`[sockets] emitting message ${outMsg.id} to ${memberIds.length} members:`, memberIds);
+        memberIds.forEach((memberId) => {
+          const sockets = userIdToSockets.get(memberId);
           console.info(
-            `[sockets] emit message ${outMsg.id} directly to user=${target} sockets=${
+            `[sockets] emit message ${outMsg.id} directly to user=${memberId} sockets=${
               sockets ? sockets.size : 0
             }`
           );
-          emitToUser(io, target, "message:new", outMsg);
+          if (sockets && sockets.size > 0) {
+            emitToUser(io, memberId, "message:new", outMsg);
+          } else {
+            console.warn(`[sockets] no sockets found for user=${memberId}, user may be offline`);
+          }
         });
 
         // Ack with normalized message
