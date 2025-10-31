@@ -110,7 +110,7 @@ function initSocket(server, corsOrigin) {
 
     socket.on("message:send", async (data, ack) => {
       try {
-        console.log(`[sockets] message:send received from user=${userId}`, data);
+        // console.log(`[sockets] message:send received from user=${userId}`, data);
         const { chatId, content, media = [] } = data;
         
         if (!chatId || !content) {
@@ -119,7 +119,7 @@ function initSocket(server, corsOrigin) {
         }
         
         const chat = await Chat.findById(chatId);
-        console.log(`[sockets] Found chat:`, chat ? { id: chat._id, members: chat.members.map(m => m.toString()) } : "not found");
+        // console.log(`[sockets] Found chat:`, chat ? { id: chat._id, members: chat.members.map(m => m.toString()) } : "not found");
         
         if (!chat) {
           console.warn(`[sockets] Chat not found: ${chatId}`);
@@ -143,7 +143,7 @@ function initSocket(server, corsOrigin) {
           status,
         });
 
-        console.log(message);
+        // console.log(message);
         chat.lastMessage = message._id;
         await chat.save();
 
@@ -299,7 +299,7 @@ function initSocket(server, corsOrigin) {
     });
 
     socket.onAny((eventName, ...args) => {
-      console.log("[sockets] received event", eventName, "with data", args[0]);
+      // console.log("[sockets] received event", eventName, "with data", args[0]);
     });
   });
 
