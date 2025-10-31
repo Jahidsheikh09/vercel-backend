@@ -1,6 +1,8 @@
 const mongoose = require("mongoose");
 const C = require("../../constants");
 
+const SECRET_KEY = process.env.MESSAGE_SECRET_KEY;
+
 const ObjectId = mongoose.SchemaTypes.ObjectId;
 const required = [true, C.FIELD_IS_REQ];
 
@@ -25,6 +27,17 @@ const MessageSchema = new mongoose.Schema(
 );
 
 MessageSchema.index({ chat: 1, createdAt: -1 });
+
+MessageSchema.pre("save", { document: true, query: false }, function (next) {
+  console.log("wtf");
+  if (this.isModified("content") && this.content) {
+    const ciphertext = CryptoJS.AES.encrypt(this.content, SECRET_KEY).toString();
+    console.log("Encrypted:", ciphertext);
+    this.content = ciphertext;
+  }
+  next();
+});
+
 
 const Message = mongoose.model("Message", MessageSchema);
 module.exports = Message;

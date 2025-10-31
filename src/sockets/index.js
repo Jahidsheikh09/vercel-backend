@@ -30,7 +30,9 @@ function removeUserSocket(socketId) {
 function emitToUser(io, userId, event, payload) {
   const set = userIdToSockets.get(userId) || new Set();
   if (!set || set.size === 0) {
-    console.debug(`[sockets] emitToUser: no sockets for user ${userId} (event: ${event})`);
+    console.debug(
+      `[sockets] emitToUser: no sockets for user ${userId} (event: ${event})`
+    );
   }
   for (const sid of set) {
     io.to(sid).emit(event, payload);
@@ -43,7 +45,8 @@ function initSocket(server, corsOrigin) {
       origin(origin, callback) {
         try {
           if (!origin) return callback(null, true); // allow file:// and same-origin
-          if (Array.isArray(corsOrigin) && corsOrigin.includes(origin)) return callback(null, true);
+          if (Array.isArray(corsOrigin) && corsOrigin.includes(origin))
+            return callback(null, true);
           return callback(new Error("Not allowed by Socket.IO CORS"), false);
         } catch (e) {
           return callback(null, true);
@@ -85,7 +88,10 @@ function initSocket(server, corsOrigin) {
         console.info(`[sockets] socket=${socket.id} joined room=${room}`);
       }
     } catch (err) {
-      console.warn(`[sockets] failed to join rooms for user=${userId}:`, err.message || err);
+      console.warn(
+        `[sockets] failed to join rooms for user=${userId}:`,
+        err.message || err
+      );
     }
 
     socket.on("typing", ({ chatId, typing }) => {
@@ -104,8 +110,10 @@ function initSocket(server, corsOrigin) {
 
     socket.on("message:send", async (data, ack) => {
       try {
+        console.log("message:send");
         const { chatId, content, media = [] } = data;
         const chat = await Chat.findById(chatId);
+        console.log(chat);
         if (!chat || !chat.members.map(String).includes(userId))
           return ack?.({ error: "Not a member" });
         const status = {};
@@ -120,6 +128,8 @@ function initSocket(server, corsOrigin) {
           media,
           status,
         });
+
+        console.log(message);
         chat.lastMessage = message._id;
         await chat.save();
 
@@ -139,7 +149,10 @@ function initSocket(server, corsOrigin) {
         let chatInfo = null;
         try {
           const pop = await Chat.findById(chat._id)
-            .populate({ path: "members", select: "username name avatarUrl isOnline lastSeen" })
+            .populate({
+              path: "members",
+              select: "username name avatarUrl isOnline lastSeen",
+            })
             .populate("lastMessage");
           chatInfo = {
             id: pop._id.toString(),
@@ -163,7 +176,9 @@ function initSocket(server, corsOrigin) {
         const outMsg = {
           id: message._id.toString(),
           chat: message.chat?.toString ? message.chat.toString() : String(message.chat),
-          sender: message.sender?.toString ? message.sender.toString() : String(message.sender),
+          sender: message.sender?.toString
+            ? message.sender.toString()
+            : String(message.sender),
           content: message.content,
           media: message.media || [],
           status: normalizeStatus(message.status),
@@ -178,13 +193,20 @@ function initSocket(server, corsOrigin) {
           io.to(outMsg.chat).emit("message:new", outMsg);
           console.info(`[sockets] emitted message ${outMsg.id} to room=${outMsg.chat}`);
         } catch (err) {
-          console.warn(`[sockets] failed to emit to room=${outMsg.chat}:`, err.message || err);
+          console.warn(
+            `[sockets] failed to emit to room=${outMsg.chat}:`,
+            err.message || err
+          );
         }
         // Always emit directly to members as a reliability measure
         chat.members.forEach((m) => {
           const target = m.toString();
           const sockets = userIdToSockets.get(target);
-          console.info(`[sockets] emit message ${outMsg.id} directly to user=${target} sockets=${sockets ? sockets.size : 0}`);
+          console.info(
+            `[sockets] emit message ${outMsg.id} directly to user=${target} sockets=${
+              sockets ? sockets.size : 0
+            }`
+          );
           emitToUser(io, target, "message:new", outMsg);
         });
 
@@ -203,7 +225,10 @@ function initSocket(server, corsOrigin) {
         socket.join(room);
         console.info(`[sockets] socket=${socket.id} joined room=${room} via chat:join`);
       } catch (err) {
-        console.warn(`[sockets] chat:join failed for socket=${socket.id} chat=${chatId}:`, err.message || err);
+        console.warn(
+          `[sockets] chat:join failed for socket=${socket.id} chat=${chatId}:`,
+          err.message || err
+        );
       }
     });
 
@@ -242,6 +267,10 @@ function initSocket(server, corsOrigin) {
           lastSeen: new Date().toISOString(),
         });
       }
+    });
+
+    socket.onAny((eventName, ...args) => {
+      console.log("[sockets] received event", eventName, "with data", args[0]);
     });
   });
 

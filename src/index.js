@@ -47,6 +47,14 @@ app.get("/health", (req, res) => {
 // API routes
 app.use("/api/users", require("./routes/userRoutes.js"));
 app.use("/api/chats", authenticate, require("./routes/chatRoutes.js"));
+app.get("/key", authenticate, (req, res) => {
+  try {
+    const key = process.env.MESSAGE_SECRET_KEY;
+    res.json({ key });
+  } catch (err) {
+    res.status(500).json({ message: "Error fetching key" });
+  }
+});
 
 const server = http.createServer(app);
 
