@@ -99,7 +99,7 @@ const getGroupMembers = asyncHandler(async (req, res) => {
     return res.status(404).json({ error: "Not found" });
   res.json({
     members: chat.members.map(mapUser),
-    admin: chat.admin?.toString() || null
+    admin: chat.admin?.toString() || null,
   });
 });
 
